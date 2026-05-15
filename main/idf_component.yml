@@ -1,0 +1,4 @@
+## IDF Component Manager Manifest File
+dependencies:
+  idf: ">=5.2.0"
+  iamflinks/i2c_lcd_pcf8574: "^1.0.0"

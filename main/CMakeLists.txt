@@ -1,2 +1,23 @@
-idf_component_register(SRCS "main.c"
-                    INCLUDE_DIRS ".")
+idf_component_register(
+    SRCS
+        "main.c"
+        "sensors.c"
+        "app_lcd.c"
+        "dht22.c"
+        "relay_control.c"
+        "buzzer.c"
+        "pzem.c"
+        "control_logic.c"
+        "wifi_iot.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        driver
+        esp_adc
+        esp_timer
+        nvs_flash
+        esp_wifi
+        esp_http_client
+        esp_event
+        esp_netif
+        json
+)
