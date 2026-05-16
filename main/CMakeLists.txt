@@ -20,5 +20,7 @@ idf_component_register(
         esp_event
         esp_netif
         json
+        mbedtls
+        esp_https_ota
         iamflinks__i2c_lcd_pcf8574
 )

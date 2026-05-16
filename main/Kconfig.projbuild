@@ -1,0 +1,35 @@
+menu "Solar Monitor IoT"
+
+config WIFI_SSID
+    string "Wi-Fi SSID"
+    default "myssid"
+    help
+        SSID of the Wi-Fi AP to connect to.
+
+config WIFI_PASSWORD
+    string "Wi-Fi password"
+    default "mypassword"
+    help
+        WPA2 passphrase. Leave empty for open networks (also change
+        threshold.authmode in wifi_iot.c to WIFI_AUTH_OPEN).
+
+config IOT_ENDPOINT
+    string "HTTP endpoint for JSON upload"
+    default "https://webhook.site/c4e2daf1-5408-4d08-8fd4-b195a14f65e2"
+    help
+        Full URL for the HTTP POST. Supports http:// and https://.
+
+config OTA_ENABLED
+    bool "Enable OTA firmware updates"
+    default n
+    help
+        Poll CONFIG_OTA_URL every 10 minutes for a new firmware binary.
+
+config OTA_URL
+    string "OTA firmware binary URL"
+    default "http://192.168.1.100:8070/solar_monitor.bin"
+    depends on OTA_ENABLED
+    help
+        URL pointing to the .bin file served by your update server.
+
+endmenu

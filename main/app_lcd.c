@@ -3,6 +3,7 @@
 #include "app_lcd.h"
 #include "app_config.h"
 #include "buzzer.h"
+#include "wifi_iot.h"
 #include "esp_log.h"
 #include "esp_check.h"
 #include "esp_timer.h"
@@ -131,9 +132,10 @@ static void render_page0(const sensor_data_t *s, const control_state_t *c)
                    s->solar_present ? "PRESENT" : "ABSENT");
     app_lcd_printf(2, 0, "GRID   %-13s",
                    s->grid_present  ? "PRESENT" : "ABSENT");
-    app_lcd_printf(3, 0, "SRC %-6s RELAY %-3s",
+    app_lcd_printf(3, 0, "SRC %-5s RLY %-3s %s",
                    charging_source_name(c->source),
-                   c->relay_on ? "ON" : "OFF");
+                   c->relay_on ? "ON" : "OFF",
+                   wifi_is_connected() ? "W " : ".w");
 }
 
 // ---------------------------------------------------------------------------

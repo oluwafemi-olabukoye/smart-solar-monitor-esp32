@@ -25,3 +25,7 @@ void control_logic_update(const sensor_data_t *s, control_state_t *out);
 
 // Short label for LCD / logs ("SOLAR", "GRID", "BATT", "NONE")
 const char *charging_source_name(charging_source_t src);
+
+// Thread-safe snapshot of the last committed control state.
+// Safe to call from any task.
+void control_logic_get_state(control_state_t *out);

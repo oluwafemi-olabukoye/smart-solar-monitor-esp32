@@ -21,12 +21,16 @@
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 static const char *TAG = "SENSORS";
 
-static adc_oneshot_unit_handle_t s_adc  = NULL;
-static adc_cali_handle_t         s_cali = NULL;
+static adc_oneshot_unit_handle_t s_adc        = NULL;
+static adc_cali_handle_t         s_cali       = NULL;
 static bool                      s_cali_valid = false;
+static SemaphoreHandle_t         s_cache_mutex = NULL;
+static sensor_data_t             g_last        = {0};
 
 // ---------------------------------------------------------------------------
 // Calibration — try curve fitting (ESP32-S2/S3/C3), fall back to line fitting
@@ -89,6 +93,9 @@ esp_err_t sensors_init(void)
                         TAG, "ch4 ldr");
 
     s_cali_valid = init_calibration();
+
+    s_cache_mutex = xSemaphoreCreateMutex();
+    if (!s_cache_mutex) return ESP_ERR_NO_MEM;
 
     ESP_LOGI(TAG, "ADC1 ready: 4 channels, atten=DB_12, cali=%s",
              s_cali_valid ? "OK" : "none");
@@ -159,5 +166,17 @@ esp_err_t sensors_read_all(sensor_data_t *out)
     out->solar_present = (out->solar_voltage >= SOLAR_PRESENT_VOLTAGE);
     out->grid_present  = (out->grid_voltage  >= GRID_PRESENT_VOLTAGE);
 
+    xSemaphoreTake(s_cache_mutex, portMAX_DELAY);
+    g_last = *out;
+    xSemaphoreGive(s_cache_mutex);
+
     return ESP_OK;
+}
+
+// ---------------------------------------------------------------------------
+void sensors_get_last(sensor_data_t *out)
+{
+    xSemaphoreTake(s_cache_mutex, portMAX_DELAY);
+    *out = g_last;
+    xSemaphoreGive(s_cache_mutex);
 }

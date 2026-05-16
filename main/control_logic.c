@@ -5,10 +5,12 @@
 #include "dht22.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
 
 static const char *TAG = "CTRL";
 
-// Internal state — only ever touched from the single sensor_task caller.
+// Spinlock protects s_state writes (sensor_task) vs reads (iot_task).
+static portMUX_TYPE      s_state_mux       = portMUX_INITIALIZER_UNLOCKED;
 static control_state_t   s_state           = {.source = SRC_NONE};
 static charging_source_t s_pending         = SRC_NONE;
 static uint32_t          s_pending_since_ms = 0;
@@ -66,10 +68,6 @@ void control_logic_update(const sensor_data_t *s, control_state_t *out)
             // Hysteresis elapsed — commit
             charging_source_t old = s_state.source;
 
-            s_state.source        = desired;
-            s_state.relay_on      = (desired == SRC_GRID);
-            s_state.last_change_ms = now_ms;
-
             if (desired == SRC_GRID) relay_on(); else relay_off();
 
             ESP_LOGI(TAG,
@@ -77,11 +75,19 @@ void control_logic_update(const sensor_data_t *s, control_state_t *out)
                 charging_source_name(old), charging_source_name(desired),
                 s->bat_voltage, s->solar_voltage, s->grid_voltage,
                 s->is_daylight ? "YES" : "NO");
+
+            portENTER_CRITICAL(&s_state_mux);
+            s_state.source         = desired;
+            s_state.relay_on       = (desired == SRC_GRID);
+            s_state.last_change_ms = now_ms;
+            portEXIT_CRITICAL(&s_state_mux);
         }
         // else: pending is accumulating — do nothing yet
     }
 
+    portENTER_CRITICAL(&s_state_mux);
     *out = s_state;
+    portEXIT_CRITICAL(&s_state_mux);
 
     // --- Alert determination (evaluated every call, highest priority wins) ---
     alert_type_t alert = ALERT_NONE;
@@ -107,4 +113,12 @@ void control_logic_update(const sensor_data_t *s, control_state_t *out)
     }
 
     buzzer_set_alert(alert);
+}
+
+// ---------------------------------------------------------------------------
+void control_logic_get_state(control_state_t *out)
+{
+    portENTER_CRITICAL(&s_state_mux);
+    *out = s_state;
+    portEXIT_CRITICAL(&s_state_mux);
 }

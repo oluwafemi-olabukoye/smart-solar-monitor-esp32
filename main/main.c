@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "esp_chip_info.h"
 #include "esp_flash.h"
+#include "nvs_flash.h"
 #include "app_lcd.h"
 #include "app_config.h"
 #include "relay_control.h"
@@ -12,6 +13,7 @@
 #include "dht22.h"
 #include "control_logic.h"
 #include "pzem.h"
+#include "wifi_iot.h"
 #include "esp_timer.h"
 
 static const char *TAG = "BOOT";
@@ -67,6 +69,16 @@ void app_main(void)
     esp_log_level_set("*", ESP_LOG_INFO);
     ESP_LOGI(TAG, "Solar Monitor v0.1 starting...");
 
+    // NVS — required for Wi-Fi and energy persistence
+    esp_err_t nvs_err = nvs_flash_init();
+    if (nvs_err == ESP_ERR_NVS_NO_FREE_PAGES ||
+        nvs_err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_LOGW(TAG, "NVS partition corrupt — erasing");
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        nvs_err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(nvs_err);
+
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
 
@@ -97,6 +109,9 @@ void app_main(void)
 
     // PZEM-004T
     ESP_ERROR_CHECK(pzem_init());
+
+    // Wi-Fi STA + IoT upload + OTA (creates iot_task and ota_task internally)
+    ESP_ERROR_CHECK(wifi_iot_init());
 
     // Start tasks
     xTaskCreate(sensor_task, "sensor", 4096, NULL, 5, NULL);

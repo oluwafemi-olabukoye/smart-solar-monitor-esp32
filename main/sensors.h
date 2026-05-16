@@ -14,3 +14,7 @@ typedef struct {
 
 esp_err_t sensors_init(void);
 esp_err_t sensors_read_all(sensor_data_t *out);
+
+// Thread-safe snapshot of the last successful sensors_read_all() result.
+// Safe to call from any task; does not touch ADC hardware.
+void sensors_get_last(sensor_data_t *out);
