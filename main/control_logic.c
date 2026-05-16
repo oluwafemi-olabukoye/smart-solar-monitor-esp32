@@ -1,6 +1,8 @@
 #include "control_logic.h"
 #include "app_config.h"
 #include "relay_control.h"
+#include "buzzer.h"
+#include "dht22.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 
@@ -80,4 +82,29 @@ void control_logic_update(const sensor_data_t *s, control_state_t *out)
     }
 
     *out = s_state;
+
+    // --- Alert determination (evaluated every call, highest priority wins) ---
+    alert_type_t alert = ALERT_NONE;
+
+    // Lowest priority: high temperature (only when DHT22 data is fresh)
+    dht22_reading_t dht;
+    dht22_get_last(&dht);
+    bool dht_fresh = dht.valid && ((now_ms - dht.last_ok_ms) <= 10000);
+    if (dht_fresh && dht.temperature_c > TEMP_HIGH_C) {
+        alert = ALERT_HIGH_TEMP;
+    }
+
+    // Battery below low threshold — pick between LOW and NO_SOURCE
+    if (s->bat_voltage <= BATTERY_LOW_VOLTAGE) {
+        alert = (s_state.source == SRC_BATTERY_ACTIVE)
+                    ? ALERT_NO_SOURCE
+                    : ALERT_BATTERY_LOW;
+    }
+
+    // Critical voltage overrides everything
+    if (s->bat_voltage <= BATTERY_CRITICAL_VOLTAGE) {
+        alert = ALERT_BATTERY_CRITICAL;
+    }
+
+    buzzer_set_alert(alert);
 }

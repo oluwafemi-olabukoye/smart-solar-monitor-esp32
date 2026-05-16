@@ -49,10 +49,23 @@ static void sensor_task(void *arg)
 
             control_logic_update(&d, &ctrl);
 
-            // LCD row 3: "SRC SOLAR  RELAY OFF" (20 chars)
-            app_lcd_printf(3, 0, "SRC %-6s RELAY %-3s",
-                           charging_source_name(ctrl.source),
-                           ctrl.relay_on ? "ON" : "OFF");
+            // LCD row 3 — alert active:  "RELAY ON   *CRITICAL" (20 chars)
+            //             no alert:       "SRC SOLAR  RELAY OFF" (20 chars)
+            const char *relay_str = ctrl.relay_on ? "ON" : "OFF";
+            const char *alert_tag = NULL;
+            switch (buzzer_get_alert()) {
+                case ALERT_BATTERY_LOW:      alert_tag = "BAT LOW";  break;
+                case ALERT_BATTERY_CRITICAL: alert_tag = "CRITICAL"; break;
+                case ALERT_HIGH_TEMP:        alert_tag = "HOT";      break;
+                case ALERT_NO_SOURCE:        alert_tag = "NO SRC";   break;
+                default: break;
+            }
+            if (alert_tag) {
+                app_lcd_printf(3, 0, "RELAY %-3s  *%-8s", relay_str, alert_tag);
+            } else {
+                app_lcd_printf(3, 0, "SRC %-6s RELAY %-3s",
+                               charging_source_name(ctrl.source), relay_str);
+            }
         }
 
         // LCD row 2: "T 28.4C H 65% OK    " or "... OLD    " (20 chars)
@@ -105,6 +118,7 @@ void app_main(void)
     // Start tasks
     xTaskCreate(sensor_task, "sensor", 4096, NULL, 5, NULL);
     xTaskCreate(dht22_task,  "dht22",  4096, NULL, 5, NULL);
+    xTaskCreate(buzzer_task, "buzzer", 2048, NULL, 4, NULL);
 
     // app_main idle loop (lowest priority consumer)
     int hb = 0;
