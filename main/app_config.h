@@ -27,9 +27,9 @@
 #define DHT22_READ_INTERVAL_MS    3000
 
 // ---- Relay / Buzzer ----
-#define RELAY_GPIO                26
+#define RELAY_GPIO                18
 #define RELAY_ACTIVE_LEVEL        0    // 0 = active LOW, 1 = active HIGH
-#define BUZZER_GPIO               25
+#define BUZZER_GPIO               5
 
 // ---- PZEM-004T ----
 #define PZEM_UART_NUM             UART_NUM_2

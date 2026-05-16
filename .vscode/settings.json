@@ -13,5 +13,7 @@
     "--background-index",
     "--query-driver=**",
     "--compile-commands-dir=c:\\Users\\fmgol\\Documents\\codebase\\side project\\smart_iot_solar\\Smart_IoT_Solar_Monitoring\\build"
-  ]
+  ],
+  "idf.portWin": "COM10",
+  "idf.flashType": "UART"
 }
