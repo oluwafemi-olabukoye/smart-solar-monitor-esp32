@@ -9,43 +9,26 @@
 #include "buzzer.h"
 #include "sensors.h"
 #include "dht22.h"
+#include "control_logic.h"
 #include "esp_timer.h"
 
 static const char *TAG = "BOOT";
 
 // ---------------------------------------------------------------------------
-// GPIO test task (Stage 1) — relay 3 s cycle, buzzer every 5 s
-// ---------------------------------------------------------------------------
-static void gpio_test_task(void *arg)
-{
-    TickType_t buzzer_last = xTaskGetTickCount();
-    while (1) {
-        relay_on();
-        vTaskDelay(pdMS_TO_TICKS(1500));
-        relay_off();
-        if ((xTaskGetTickCount() - buzzer_last) >= pdMS_TO_TICKS(5000)) {
-            buzzer_beep(100);
-            buzzer_last = xTaskGetTickCount();
-        }
-        vTaskDelay(pdMS_TO_TICKS(1500));
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Sensor + LCD task (Stage 3) — 1 s update rate
+// Sensor + LCD task (Stage 4) — 1 s update rate
 //
 // LCD layout (20 × 4):
-//   Row 0: "BAT:  xx.xxV        "  (width 20)
-//   Row 1: "SOL:xx.xx GRD:xx.xxV"  (width 20)
+//   Row 0: "BAT:  xx.xxV        "  battery voltage
+//   Row 1: "SOL:xx.xx GRD:xx.xxV"  solar + grid voltages
 //   Row 2: "T xx.xC H xx% OK    "  DHT22, fresh or OLD if stale >10 s
-//   Row 3: "Stage 3: DHT22      "  (static)
+//   Row 3: "SRC SOLAR  RELAY OFF"  control state (dynamic)
 //
-// Rows are written in-place each second — no lcd_clear() — to avoid flicker.
+// Rows are written in-place — no lcd_clear() — to avoid flicker.
 // ---------------------------------------------------------------------------
 static void sensor_task(void *arg)
 {
-    sensor_data_t d = {0};
-    app_lcd_print(3, 0, "Stage 3: DHT22      ");   // static row, write once
+    sensor_data_t   d    = {0};
+    control_state_t ctrl = {0};
 
     while (1) {
         if (sensors_read_all(&d) == ESP_OK) {
@@ -60,11 +43,16 @@ static void sensor_task(void *arg)
                 d.ldr_raw,
                 d.is_daylight ? "YES" : "NO");
 
-            // LCD row 0: "BAT:  13.91V        " (20 chars)
             app_lcd_printf(0, 0, "BAT:%7.2fV        ", d.bat_voltage);
-            // LCD row 1: "SOL:13.54 GRD:13.96V" (20 chars)
             app_lcd_printf(1, 0, "SOL:%5.2f GRD:%5.2fV",
                            d.solar_voltage, d.grid_voltage);
+
+            control_logic_update(&d, &ctrl);
+
+            // LCD row 3: "SRC SOLAR  RELAY OFF" (20 chars)
+            app_lcd_printf(3, 0, "SRC %-6s RELAY %-3s",
+                           charging_source_name(ctrl.source),
+                           ctrl.relay_on ? "ON" : "OFF");
         }
 
         // LCD row 2: "T 28.4C H 65% OK    " or "... OLD    " (20 chars)
@@ -111,10 +99,12 @@ void app_main(void)
     // DHT22
     ESP_ERROR_CHECK(dht22_init());
 
+    // Control logic (must come after relay_control_init)
+    ESP_ERROR_CHECK(control_logic_init());
+
     // Start tasks
-    xTaskCreate(gpio_test_task, "gpio_test",  2048, NULL, 4, NULL);
-    xTaskCreate(sensor_task,    "sensor",     4096, NULL, 5, NULL);
-    xTaskCreate(dht22_task,     "dht22",      4096, NULL, 5, NULL);
+    xTaskCreate(sensor_task, "sensor", 4096, NULL, 5, NULL);
+    xTaskCreate(dht22_task,  "dht22",  4096, NULL, 5, NULL);
 
     // app_main idle loop (lowest priority consumer)
     int hb = 0;

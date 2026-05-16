@@ -39,11 +39,11 @@
 #define PZEM_SLAVE_ADDR           0xF8
 
 // ---- Thresholds ----
-#define SOLAR_PRESENT_VOLTAGE     16.0f
+#define SOLAR_PRESENT_VOLTAGE     12.5f //16
 #define GRID_PRESENT_VOLTAGE      10.0f
 #define BATTERY_LOW_VOLTAGE       11.9f
 #define BATTERY_CRITICAL_VOLTAGE  11.7f
-#define BATTERY_FULL_VOLTAGE      13.8f
+#define BATTERY_FULL_VOLTAGE      14.8f //13.8
 #define LDR_DAY_THRESHOLD_RAW     1500
 #define TEMP_HIGH_C               45.0f
 
