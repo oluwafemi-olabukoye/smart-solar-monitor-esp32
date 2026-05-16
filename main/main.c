@@ -8,6 +8,8 @@
 #include "relay_control.h"
 #include "buzzer.h"
 #include "sensors.h"
+#include "dht22.h"
+#include "esp_timer.h"
 
 static const char *TAG = "BOOT";
 
@@ -30,24 +32,23 @@ static void gpio_test_task(void *arg)
 }
 
 // ---------------------------------------------------------------------------
-// Sensor + LCD task (Stage 2) — 1 s update rate
+// Sensor + LCD task (Stage 3) — 1 s update rate
 //
 // LCD layout (20 × 4):
 //   Row 0: "BAT:  xx.xxV        "  (width 20)
 //   Row 1: "SOL:xx.xx GRD:xx.xxV"  (width 20)
-//   Row 2: "LDR:xxxx   DAY/NGT  "  (width 20)
-//   Row 3: "Stage 2: ADC Test   "  (static)
+//   Row 2: "T xx.xC H xx% OK    "  DHT22, fresh or OLD if stale >10 s
+//   Row 3: "Stage 3: DHT22      "  (static)
 //
 // Rows are written in-place each second — no lcd_clear() — to avoid flicker.
 // ---------------------------------------------------------------------------
 static void sensor_task(void *arg)
 {
     sensor_data_t d = {0};
-    app_lcd_print(3, 0, "Stage 2: ADC Test   ");   // static row, write once
+    app_lcd_print(3, 0, "Stage 3: DHT22      ");   // static row, write once
 
     while (1) {
         if (sensors_read_all(&d) == ESP_OK) {
-            // Serial log (matches user-specified format)
             ESP_LOGI("SENSOR",
                 "BAT raw=%d mv=%.0f V=%.2f  "
                 "SOLAR raw=%d V=%.2f  "
@@ -59,17 +60,22 @@ static void sensor_task(void *arg)
                 d.ldr_raw,
                 d.is_daylight ? "YES" : "NO");
 
-            // LCD: row 0 — "BAT:  12.32V        " (20 chars)
+            // LCD row 0: "BAT:  13.91V        " (20 chars)
             app_lcd_printf(0, 0, "BAT:%7.2fV        ", d.bat_voltage);
-
-            // LCD: row 1 — "SOL:18.40 GRD:13.10V" (20 chars)
+            // LCD row 1: "SOL:13.54 GRD:13.96V" (20 chars)
             app_lcd_printf(1, 0, "SOL:%5.2f GRD:%5.2fV",
                            d.solar_voltage, d.grid_voltage);
-
-            // LCD: row 2 — "LDR:1820   DAY      " (20 chars)
-            app_lcd_printf(2, 0, "LDR:%-4d   %-3s      ",
-                           d.ldr_raw, d.is_daylight ? "DAY" : "NGT");
         }
+
+        // LCD row 2: "T 28.4C H 65% OK    " or "... OLD    " (20 chars)
+        dht22_reading_t dht;
+        dht22_get_last(&dht);
+        uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        bool stale = !dht.valid || ((now_ms - dht.last_ok_ms) > 10000);
+        app_lcd_printf(2, 0, "T%5.1fC H%2.0f%% %-3s    ",
+                       dht.temperature_c, dht.humidity_pct,
+                       stale ? "OLD" : "OK");
+
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -102,9 +108,13 @@ void app_main(void)
     // ADC sensors
     ESP_ERROR_CHECK(sensors_init());
 
+    // DHT22
+    ESP_ERROR_CHECK(dht22_init());
+
     // Start tasks
     xTaskCreate(gpio_test_task, "gpio_test",  2048, NULL, 4, NULL);
     xTaskCreate(sensor_task,    "sensor",     4096, NULL, 5, NULL);
+    xTaskCreate(dht22_task,     "dht22",      4096, NULL, 5, NULL);
 
     // app_main idle loop (lowest priority consumer)
     int hb = 0;
