@@ -113,6 +113,7 @@ static const char *alert_label(alert_type_t a)
         case ALERT_BATTERY_CRITICAL: return "CRITICAL";
         case ALERT_HIGH_TEMP:        return "HOT";
         case ALERT_NO_SOURCE:        return "NO SRC";
+        case ALERT_SENSOR_FAULT:     return "FAULT";
         default:                     return "NONE";
     }
 }
@@ -202,6 +203,15 @@ void app_lcd_render_page(int page_idx,
                          const dht22_reading_t *d,
                          const pzem_reading_t  *p)
 {
+    // Sensor fault overrides all pages
+    if (c->sys_state == SYS_FAULT) {
+        app_lcd_printf(0, 0, "!! SENSOR  FAULT  !!");
+        app_lcd_printf(1, 0, "Bat: %5.2fV          ", s->bat_voltage);
+        app_lcd_printf(2, 0, "Sol: %5.2fV          ", s->solar_voltage);
+        app_lcd_printf(3, 0, "Check wiring & ADC  ");
+        return;
+    }
+
     switch (page_idx % 4) {
         case 0: render_page0(s, c);  break;
         case 1: render_page1(s, c);  break;

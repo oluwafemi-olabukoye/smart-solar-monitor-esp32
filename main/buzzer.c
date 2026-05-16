@@ -98,6 +98,12 @@ void buzzer_task(void *arg)
                 vTaskDelay(pdMS_TO_TICKS(200));
                 break;
 
+            case ALERT_SENSOR_FAULT:
+                // Slow 200 ms beep every 3 s — distinct from all other patterns
+                buzzer_beep(200);
+                vTaskDelay(pdMS_TO_TICKS(2800));
+                break;
+
             default:  // ALERT_NONE — idle
                 vTaskDelay(pdMS_TO_TICKS(200));
                 break;

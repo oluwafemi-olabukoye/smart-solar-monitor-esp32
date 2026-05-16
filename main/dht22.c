@@ -5,6 +5,7 @@
 #include "esp_check.h"
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
+#include "esp_task_wdt.h"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -129,6 +130,7 @@ void dht22_get_last(dht22_reading_t *out)
 // ---------------------------------------------------------------------------
 void dht22_task(void *arg)
 {
+    esp_task_wdt_add(NULL);
     while (1) {
         dht22_reading_t r = {0};
         esp_err_t err = dht22_read(&r);
@@ -149,6 +151,7 @@ void dht22_task(void *arg)
                      last.temperature_c, last.humidity_pct, (unsigned long)age_s);
         }
 
+        esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(DHT22_READ_INTERVAL_MS));
     }
 }

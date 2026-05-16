@@ -8,6 +8,7 @@ typedef enum {
     ALERT_BATTERY_CRITICAL,    // three rapid 80 ms beeps every 2 s
     ALERT_HIGH_TEMP,           // long 500 ms beep every 10 s
     ALERT_NO_SOURCE,           // continuous 200 ms on / 200 ms off
+    ALERT_SENSOR_FAULT,        // slow 200 ms beep every 3 s — highest priority
 } alert_type_t;
 
 esp_err_t    buzzer_init(void);

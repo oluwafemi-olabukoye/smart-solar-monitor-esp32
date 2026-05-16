@@ -14,6 +14,7 @@ idf_component_register(
         driver
         esp_adc
         esp_timer
+        esp_system
         nvs_flash
         esp_wifi
         esp_http_client

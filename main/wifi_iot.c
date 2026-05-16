@@ -15,6 +15,7 @@
 #include "freertos/event_groups.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
+#include "esp_task_wdt.h"
 #include "cJSON.h"
 #include <string.h>
 #include <inttypes.h>
@@ -109,6 +110,8 @@ static void http_post_json(const char *url, const char *body, int body_len)
 // ---------------------------------------------------------------------------
 void iot_task(void *arg)
 {
+    esp_task_wdt_add(NULL);
+
     uint32_t last_upload_ms  = 0;
     uint32_t last_persist_ms = 0;
 
@@ -142,6 +145,8 @@ void iot_task(void *arg)
             cJSON *root = cJSON_CreateObject();
             cJSON_AddNumberToObject(root, "uptime_s",
                                     (double)(esp_timer_get_time() / 1000000LL));
+            cJSON_AddStringToObject(root, "sys_state",   system_state_name(c.sys_state));
+            cJSON_AddNumberToObject(root, "alert_flags", (double)c.alert_flags);
 
             cJSON *bat = cJSON_AddObjectToObject(root, "battery");
             cJSON_AddNumberToObject(bat, "voltage_v", (double)s.bat_voltage);
@@ -179,6 +184,7 @@ void iot_task(void *arg)
             }
         }
 
+        esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

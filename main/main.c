@@ -4,6 +4,8 @@
 #include "esp_log.h"
 #include "esp_chip_info.h"
 #include "esp_flash.h"
+#include "esp_system.h"
+#include "esp_task_wdt.h"
 #include "nvs_flash.h"
 #include "app_lcd.h"
 #include "app_config.h"
@@ -23,6 +25,8 @@ static const char *TAG = "BOOT";
 // ---------------------------------------------------------------------------
 static void sensor_task(void *arg)
 {
+    esp_task_wdt_add(NULL);
+
     sensor_data_t   d    = {0};
     control_state_t ctrl = {0};
     int             page          = 0;
@@ -59,6 +63,7 @@ static void sensor_task(void *arg)
 
         app_lcd_render_page(page, &d, &ctrl, &dht, &pzem);
 
+        esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -68,6 +73,15 @@ void app_main(void)
 {
     esp_log_level_set("*", ESP_LOG_INFO);
     ESP_LOGI(TAG, "Solar Monitor v0.1 starting...");
+
+    // Log reset reason — useful for diagnosing field crashes
+    static const char *const reset_names[] = {
+        "UNKNOWN", "POWER_ON", "EXT", "SW", "PANIC",
+        "INT_WDT", "TASK_WDT", "WDT", "DEEPSLEEP", "BROWNOUT", "SDIO"
+    };
+    int rr = (int)esp_reset_reason();
+    ESP_LOGI(TAG, "Reset reason: %s (%d)",
+             (rr >= 0 && rr <= 10) ? reset_names[rr] : "?", rr);
 
     // NVS — required for Wi-Fi and energy persistence
     esp_err_t nvs_err = nvs_flash_init();
@@ -119,10 +133,13 @@ void app_main(void)
     xTaskCreate(buzzer_task, "buzzer", 2048, NULL, 4, NULL);
     xTaskCreate(pzem_task,   "pzem",   3072, NULL, 4, NULL);
 
-    // app_main idle loop (lowest priority consumer)
+    // app_main idle loop — 5 s heartbeat (within 10 s WDT window)
+    esp_task_wdt_add(NULL);
     int hb = 0;
     while (1) {
-        ESP_LOGI(TAG, "Heartbeat #%d", ++hb);
-        vTaskDelay(pdMS_TO_TICKS(30000));
+        ESP_LOGI(TAG, "Heartbeat #%d  free_heap=%" PRIu32 " B",
+                 ++hb, (uint32_t)esp_get_free_heap_size());
+        esp_task_wdt_reset();
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }

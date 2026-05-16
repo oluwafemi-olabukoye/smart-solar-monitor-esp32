@@ -166,6 +166,15 @@ esp_err_t sensors_read_all(sensor_data_t *out)
     out->solar_present = (out->solar_voltage >= SOLAR_PRESENT_VOLTAGE);
     out->grid_present  = (out->grid_voltage  >= GRID_PRESENT_VOLTAGE);
 
+    // Sanity: voltages outside operating range → ADC or wiring fault
+    out->is_fault = (out->bat_voltage   <  5.0f  ||
+                     out->bat_voltage   > 20.0f  ||
+                     out->solar_voltage > 30.0f);
+    if (out->is_fault) {
+        ESP_LOGE(TAG, "SENSOR FAULT: bat=%.2fV sol=%.2fV grd=%.2fV",
+                 out->bat_voltage, out->solar_voltage, out->grid_voltage);
+    }
+
     xSemaphoreTake(s_cache_mutex, portMAX_DELAY);
     g_last = *out;
     xSemaphoreGive(s_cache_mutex);

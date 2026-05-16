@@ -10,6 +10,7 @@ typedef struct {
     bool  is_daylight;
     bool  solar_present;
     bool  grid_present;
+    bool  is_fault;     // true if any voltage is outside sane operating range
 } sensor_data_t;
 
 esp_err_t sensors_init(void);

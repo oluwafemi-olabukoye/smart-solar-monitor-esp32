@@ -3,6 +3,7 @@
 #include "esp_log.h"
 #include "esp_check.h"
 #include "esp_timer.h"
+#include "esp_task_wdt.h"
 #include "driver/uart.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -171,6 +172,7 @@ void pzem_get_last(pzem_reading_t *out)
 // ---------------------------------------------------------------------------
 void pzem_task(void *arg)
 {
+    esp_task_wdt_add(NULL);
     while (1) {
         pzem_reading_t r = {0};
         esp_err_t err = pzem_read(&r);
@@ -188,6 +190,7 @@ void pzem_task(void *arg)
             ESP_LOGW(TAG, "Read fail: %s", esp_err_to_name(err));
         }
 
+        esp_task_wdt_reset();
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
