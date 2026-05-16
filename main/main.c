@@ -10,6 +10,7 @@
 #include "sensors.h"
 #include "dht22.h"
 #include "control_logic.h"
+#include "pzem.h"
 #include "esp_timer.h"
 
 static const char *TAG = "BOOT";
@@ -115,10 +116,14 @@ void app_main(void)
     // Control logic (must come after relay_control_init)
     ESP_ERROR_CHECK(control_logic_init());
 
+    // PZEM-004T
+    ESP_ERROR_CHECK(pzem_init());
+
     // Start tasks
     xTaskCreate(sensor_task, "sensor", 4096, NULL, 5, NULL);
     xTaskCreate(dht22_task,  "dht22",  4096, NULL, 5, NULL);
     xTaskCreate(buzzer_task, "buzzer", 2048, NULL, 4, NULL);
+    xTaskCreate(pzem_task,   "pzem",   3072, NULL, 4, NULL);
 
     // app_main idle loop (lowest priority consumer)
     int hb = 0;
