@@ -2,8 +2,10 @@
 #include <stdarg.h>
 #include "app_lcd.h"
 #include "app_config.h"
+#include "buzzer.h"
 #include "esp_log.h"
 #include "esp_check.h"
+#include "esp_timer.h"
 #include "driver/i2c_master.h"
 #include "i2c_lcd_pcf8574.h"
 
@@ -89,4 +91,119 @@ void app_lcd_printf(uint8_t row, uint8_t col, const char *fmt, ...)
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
     app_lcd_print(row, col, buf);
+}
+
+// ---------------------------------------------------------------------------
+// Page rendering helpers
+// ---------------------------------------------------------------------------
+
+static const char *bat_status(float v)
+{
+    if (v >= BATTERY_FULL_VOLTAGE)     return "FULL";
+    if (v <= BATTERY_CRITICAL_VOLTAGE) return "CRIT";
+    if (v <= BATTERY_LOW_VOLTAGE)      return "LOW";
+    return "OK";
+}
+
+static const char *alert_label(alert_type_t a)
+{
+    switch (a) {
+        case ALERT_BATTERY_LOW:      return "BAT LOW";
+        case ALERT_BATTERY_CRITICAL: return "CRITICAL";
+        case ALERT_HIGH_TEMP:        return "HOT";
+        case ALERT_NO_SOURCE:        return "NO SRC";
+        default:                     return "NONE";
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Page 0 — Power Overview
+//   Row 0: "BAT  13.91V  OK     "
+//   Row 1: "SOLAR  PRESENT      "
+//   Row 2: "GRID   PRESENT      "
+//   Row 3: "SRC SOLAR  RELAY OFF"
+// ---------------------------------------------------------------------------
+static void render_page0(const sensor_data_t *s, const control_state_t *c)
+{
+    app_lcd_printf(0, 0, "BAT %5.2fV  %-4s    ",
+                   s->bat_voltage, bat_status(s->bat_voltage));
+    app_lcd_printf(1, 0, "SOLAR  %-13s",
+                   s->solar_present ? "PRESENT" : "ABSENT");
+    app_lcd_printf(2, 0, "GRID   %-13s",
+                   s->grid_present  ? "PRESENT" : "ABSENT");
+    app_lcd_printf(3, 0, "SRC %-6s RELAY %-3s",
+                   charging_source_name(c->source),
+                   c->relay_on ? "ON" : "OFF");
+}
+
+// ---------------------------------------------------------------------------
+// Page 1 — Sources Detail
+//   Row 0: "Solar V:  13.49V    "
+//   Row 1: "Grid  V:  13.95V    "
+//   Row 2: "LDR raw: 2384 DAY   "
+//   Row 3: "Relay: OFF  (BATT)  "
+// ---------------------------------------------------------------------------
+static void render_page1(const sensor_data_t *s, const control_state_t *c)
+{
+    app_lcd_printf(0, 0, "Solar V: %6.2fV     ", s->solar_voltage);
+    app_lcd_printf(1, 0, "Grid  V: %6.2fV     ", s->grid_voltage);
+    app_lcd_printf(2, 0, "LDR raw: %4d %-3s   ",
+                   s->ldr_raw, s->is_daylight ? "DAY" : "NGT");
+    app_lcd_printf(3, 0, "Relay: %-3s  (%s)           ",
+                   c->relay_on ? "ON" : "OFF",
+                   charging_source_name(c->source));
+}
+
+// ---------------------------------------------------------------------------
+// Page 2 — Environment
+//   Row 0: "Temp:  30.9 C   OK  "
+//   Row 1: "Humid: 75.5 %       "
+//   Row 2: "Alert: NONE         "
+//   Row 3: "Uptime: 0d 00:28    "
+// ---------------------------------------------------------------------------
+static void render_page2(const dht22_reading_t *d)
+{
+    uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    bool stale = !d->valid || ((now_ms - d->last_ok_ms) > 10000);
+
+    app_lcd_printf(0, 0, "Temp: %5.1f C   %-3s  ",
+                   d->temperature_c, stale ? "OLD" : "OK");
+    app_lcd_printf(1, 0, "Humid: %4.1f %%       ", d->humidity_pct);
+    app_lcd_printf(2, 0, "Alert: %-8s      ", alert_label(buzzer_get_alert()));
+
+    uint64_t uptime_s = (uint64_t)(esp_timer_get_time() / 1000000LL);
+    uint32_t days  = (uint32_t)(uptime_s / 86400);
+    uint32_t hours = (uint32_t)((uptime_s % 86400) / 3600);
+    uint32_t mins  = (uint32_t)((uptime_s % 3600) / 60);
+    app_lcd_printf(3, 0, "Uptime:%2ud %02u:%02u    ", days, hours, mins);
+}
+
+// ---------------------------------------------------------------------------
+// Page 3 — AC Load (PZEM)
+//   Row 0: "AC V:  223.0 V      "
+//   Row 1: "AC I:    0.089 A    "
+//   Row 2: "Power:   19.2 W     "
+//   Row 3: "Energy:  0.00 kWh   "
+// ---------------------------------------------------------------------------
+static void render_page3(const pzem_reading_t *p)
+{
+    app_lcd_printf(0, 0, "AC V: %6.1f V      ", p->voltage);
+    app_lcd_printf(1, 0, "AC I: %8.3f A    ", p->current);
+    app_lcd_printf(2, 0, "Power: %6.1f W     ", p->power);
+    app_lcd_printf(3, 0, "Energy: %5.2f kWh  ", p->energy / 1000.0f);
+}
+
+// ---------------------------------------------------------------------------
+void app_lcd_render_page(int page_idx,
+                         const sensor_data_t   *s,
+                         const control_state_t *c,
+                         const dht22_reading_t *d,
+                         const pzem_reading_t  *p)
+{
+    switch (page_idx % 4) {
+        case 0: render_page0(s, c);  break;
+        case 1: render_page1(s, c);  break;
+        case 2: render_page2(d);     break;
+        case 3: render_page3(p);     break;
+    }
 }

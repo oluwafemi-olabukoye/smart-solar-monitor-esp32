@@ -5,6 +5,7 @@
 #include "esp_chip_info.h"
 #include "esp_flash.h"
 #include "app_lcd.h"
+#include "app_config.h"
 #include "relay_control.h"
 #include "buzzer.h"
 #include "sensors.h"
@@ -16,20 +17,14 @@
 static const char *TAG = "BOOT";
 
 // ---------------------------------------------------------------------------
-// Sensor + LCD task (Stage 4) — 1 s update rate
-//
-// LCD layout (20 × 4):
-//   Row 0: "BAT:  xx.xxV        "  battery voltage
-//   Row 1: "SOL:xx.xx GRD:xx.xxV"  solar + grid voltages
-//   Row 2: "T xx.xC H xx% OK    "  DHT22, fresh or OLD if stale >10 s
-//   Row 3: "SRC SOLAR  RELAY OFF"  control state (dynamic)
-//
-// Rows are written in-place — no lcd_clear() — to avoid flicker.
+// Sensor + LCD task (Stage 7) — 1 s update, 4-page LCD rotation
 // ---------------------------------------------------------------------------
 static void sensor_task(void *arg)
 {
     sensor_data_t   d    = {0};
     control_state_t ctrl = {0};
+    int             page          = 0;
+    uint32_t        page_start_ms = 0;
 
     while (1) {
         if (sensors_read_all(&d) == ESP_OK) {
@@ -44,39 +39,23 @@ static void sensor_task(void *arg)
                 d.ldr_raw,
                 d.is_daylight ? "YES" : "NO");
 
-            app_lcd_printf(0, 0, "BAT:%7.2fV        ", d.bat_voltage);
-            app_lcd_printf(1, 0, "SOL:%5.2f GRD:%5.2fV",
-                           d.solar_voltage, d.grid_voltage);
-
             control_logic_update(&d, &ctrl);
-
-            // LCD row 3 — alert active:  "RELAY ON   *CRITICAL" (20 chars)
-            //             no alert:       "SRC SOLAR  RELAY OFF" (20 chars)
-            const char *relay_str = ctrl.relay_on ? "ON" : "OFF";
-            const char *alert_tag = NULL;
-            switch (buzzer_get_alert()) {
-                case ALERT_BATTERY_LOW:      alert_tag = "BAT LOW";  break;
-                case ALERT_BATTERY_CRITICAL: alert_tag = "CRITICAL"; break;
-                case ALERT_HIGH_TEMP:        alert_tag = "HOT";      break;
-                case ALERT_NO_SOURCE:        alert_tag = "NO SRC";   break;
-                default: break;
-            }
-            if (alert_tag) {
-                app_lcd_printf(3, 0, "RELAY %-3s  *%-8s", relay_str, alert_tag);
-            } else {
-                app_lcd_printf(3, 0, "SRC %-6s RELAY %-3s",
-                               charging_source_name(ctrl.source), relay_str);
-            }
         }
 
-        // LCD row 2: "T 28.4C H 65% OK    " or "... OLD    " (20 chars)
         dht22_reading_t dht;
         dht22_get_last(&dht);
+
+        pzem_reading_t pzem;
+        pzem_get_last(&pzem);
+
         uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
-        bool stale = !dht.valid || ((now_ms - dht.last_ok_ms) > 10000);
-        app_lcd_printf(2, 0, "T%5.1fC H%2.0f%% %-3s    ",
-                       dht.temperature_c, dht.humidity_pct,
-                       stale ? "OLD" : "OK");
+        if ((now_ms - page_start_ms) >= LCD_PAGE_DURATION_MS) {
+            page = (page + 1) % 4;
+            page_start_ms = now_ms;
+            app_lcd_clear();
+        }
+
+        app_lcd_render_page(page, &d, &ctrl, &dht, &pzem);
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
