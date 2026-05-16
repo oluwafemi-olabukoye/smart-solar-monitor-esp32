@@ -11,7 +11,7 @@
 // ---- ADC1 channels ----
 #define BAT_ADC_GPIO              34   // ADC1_CH6
 #define SOLAR_ADC_GPIO            35   // ADC1_CH7
-#define GRID_ADC_GPIO             36   // ADC1_CH0 (VP). Use GPIO39/CH3 if wired to VN.
+#define GRID_ADC_GPIO             33   // ADC1_CH5
 #define LDR_ADC_GPIO              32   // ADC1_CH4
 
 // ---- Voltage dividers ----
