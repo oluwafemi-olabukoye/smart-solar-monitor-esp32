@@ -157,6 +157,7 @@ esp_err_t sensors_read_all(sensor_data_t *out)
     // LDR — GPIO32, ADC1_CH4, raw only (no voltage divider on this channel)
     ESP_RETURN_ON_ERROR(read_channel(ADC_CHANNEL_4, &raw, &mv), TAG, "ldr");
     out->ldr_raw = raw;
+    out->ldr_pct = (raw / 4095.0f) * 100.0f;
 
     // --- Derived flags ---
     // LDR wiring assumption: pull-DOWN resistor to GND.

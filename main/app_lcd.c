@@ -150,8 +150,8 @@ static void render_page1(const sensor_data_t *s, const control_state_t *c)
 {
     app_lcd_printf(0, 0, "Solar V: %6.2fV     ", s->solar_voltage);
     app_lcd_printf(1, 0, "Grid  V: %6.2fV     ", s->grid_voltage);
-    app_lcd_printf(2, 0, "LDR raw: %4d %-3s   ",
-                   s->ldr_raw, s->is_daylight ? "DAY" : "NGT");
+    app_lcd_printf(2, 0, "LDR: %3.0f%% %-3s       ",
+                   s->ldr_pct, s->is_daylight ? "DAY" : "NGT");
     app_lcd_printf(3, 0, "Relay: %-3s  (%s)           ",
                    c->relay_on ? "ON" : "OFF",
                    charging_source_name(c->source));

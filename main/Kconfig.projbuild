@@ -19,6 +19,37 @@ config IOT_ENDPOINT
     help
         Full URL for the HTTP POST. Supports http:// and https://.
 
+config FIREBASE_ENABLED
+    bool "Enable Firebase Realtime Database upload"
+    default n
+    help
+        Publish sensor data to Firebase RTDB via HTTPS PUT every 30 seconds,
+        overwriting the node at FIREBASE_PATH with the latest snapshot.
+
+config FIREBASE_HOST
+    string "Firebase RTDB base URL"
+    default "https://your-project-default-rtdb.firebaseio.com"
+    depends on FIREBASE_ENABLED
+    help
+        Base URL of your Firebase Realtime Database, without a trailing slash.
+        Example: https://myproject-default-rtdb.firebaseio.com
+
+config FIREBASE_AUTH_TOKEN
+    string "Firebase auth token (leave empty for open rules)"
+    default ""
+    depends on FIREBASE_ENABLED
+    help
+        Database Secret or short-lived ID token appended as ?auth=<token>.
+        Leave empty only if your RTDB security rules allow unauthenticated writes.
+
+config FIREBASE_PATH
+    string "Firebase RTDB path for latest snapshot"
+    default "/solar_monitor/latest"
+    depends on FIREBASE_ENABLED
+    help
+        Path within the database to overwrite on each publish. A .json
+        extension is appended automatically. Example: /solar_monitor/latest
+
 config OTA_ENABLED
     bool "Enable OTA firmware updates"
     default n

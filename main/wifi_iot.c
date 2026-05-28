@@ -75,7 +75,7 @@ static float nvs_load_energy(void)
 }
 
 // ---------------------------------------------------------------------------
-// HTTP POST
+// HTTP helpers
 // ---------------------------------------------------------------------------
 static void http_post_json(const char *url, const char *body, int body_len)
 {
@@ -104,6 +104,57 @@ static void http_post_json(const char *url, const char *body, int body_len)
     }
     esp_http_client_cleanup(client);
 }
+
+#ifdef CONFIG_FIREBASE_ENABLED
+static void firebase_publish(const char *body, int body_len)
+{
+    const char *host  = CONFIG_FIREBASE_HOST;
+    const char *path  = CONFIG_FIREBASE_PATH;
+    const char *token = CONFIG_FIREBASE_AUTH_TOKEN;
+    size_t token_len  = strlen(token);
+
+    // <host><path>.json  or  <host><path>.json?auth=<token>
+    size_t url_size = strlen(host) + strlen(path) + 6
+                    + (token_len ? 6 + token_len : 0);
+    char *url = malloc(url_size);
+    if (!url) { ESP_LOGW(TAG, "firebase_publish: OOM"); return; }
+    if (token_len > 0) {
+        snprintf(url, url_size, "%s%s.json?auth=%s", host, path, token);
+    } else {
+        snprintf(url, url_size, "%s%s.json", host, path);
+    }
+
+    esp_http_client_config_t cfg = {
+        .url               = url,
+        .method            = HTTP_METHOD_PUT,
+        .timeout_ms        = 8000,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (!client) {
+        ESP_LOGW(TAG, "firebase_publish: init failed");
+        free(url);
+        return;
+    }
+
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field(client, body, body_len);
+
+    esp_err_t err = esp_http_client_perform(client);
+    if (err == ESP_OK) {
+        int status = esp_http_client_get_status_code(client);
+        if (status < 200 || status >= 300) {
+            ESP_LOGW(TAG, "Firebase HTTP %d", status);
+        } else {
+            ESP_LOGI(TAG, "Firebase PUT OK (%d bytes, HTTP %d)", body_len, status);
+        }
+    } else {
+        ESP_LOGW(TAG, "Firebase PUT failed: %s", esp_err_to_name(err));
+    }
+    esp_http_client_cleanup(client);
+    free(url);
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // IoT upload task — JSON POST every 30 s, energy NVS every 5 min
@@ -157,6 +208,7 @@ void iot_task(void *arg)
             cJSON_AddNumberToObject(solar, "voltage_v", (double)s.solar_voltage);
             cJSON_AddBoolToObject  (solar, "present",   s.solar_present);
             cJSON_AddBoolToObject  (solar, "daylight",  s.is_daylight);
+            cJSON_AddNumberToObject(solar, "ldr_pct",   (double)s.ldr_pct);
 
             cJSON *grid = cJSON_AddObjectToObject(root, "grid");
             cJSON_AddNumberToObject(grid, "voltage_v", (double)s.grid_voltage);
@@ -180,6 +232,9 @@ void iot_task(void *arg)
 
             if (body) {
                 http_post_json(CONFIG_IOT_ENDPOINT, body, (int)strlen(body));
+#ifdef CONFIG_FIREBASE_ENABLED
+                firebase_publish(body, (int)strlen(body));
+#endif
                 free(body);
             }
         }
